@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">SerialV2</string>
+    <string name="type_data_to_send">Type data to send</string>
+    <string name="send">Send</string>
+    <string name="read">Read</string>
+    <string name="device_name">Device Name</string>
+    <string name="details">Details</string>
+    <string name="refresh">Refresh</string>
+</resources>
