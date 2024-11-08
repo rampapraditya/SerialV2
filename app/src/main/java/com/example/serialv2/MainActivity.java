@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -20,6 +21,7 @@ import com.hoho.android.usbserial.driver.UsbSerialProber;
 import com.hoho.android.usbserial.util.SerialInputOutputManager;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.Executors;
 
@@ -45,12 +47,7 @@ public class MainActivity extends AppCompatActivity {
         buttonSend = findViewById(R.id.buttonSend);
 
         btnRefresh.setOnClickListener(v -> listDevices());
-        buttonSend.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                sendData();
-            }
-        });
+        buttonSend.setOnClickListener(v -> sendData());
 
         deviceRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         listDevices();
@@ -91,7 +88,10 @@ public class MainActivity extends AppCompatActivity {
         SerialInputOutputManager usbIoManager = new SerialInputOutputManager(serialPort, new SerialInputOutputManager.Listener() {
             @Override
             public void onNewData(byte[] data) {
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Received: " + new String(data), Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> {
+                    String s = new String(data, StandardCharsets.UTF_8);
+                    Toast.makeText(MainActivity.this, s, Toast.LENGTH_SHORT).show();
+                });
             }
 
             @Override
