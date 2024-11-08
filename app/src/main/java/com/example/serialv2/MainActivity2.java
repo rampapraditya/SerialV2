@@ -10,7 +10,6 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -32,14 +31,17 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executors;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity2 extends AppCompatActivity {
 
     private static final String ACTION_USB_PERMISSION = "com.example.serialv2.USB_PERMISSION";
     private UsbManager usbManager;
     private UsbSerialPort serialPort;
+    private UsbSerialDriver currentDriver; // Driver saat ini yang memerlukan izin
     private RecyclerView deviceRecyclerView;
     private EditText editTextSend;
-    private TextView status;
+    private TextView textViewStatus;
+    private Button buttonConnect;
+    private Button buttonDisconnect;
 
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
         @Override
@@ -69,19 +71,24 @@ public class MainActivity extends AppCompatActivity {
         usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
         deviceRecyclerView = findViewById(R.id.recyclerViewDevices);
         editTextSend = findViewById(R.id.txtData);
-        status = findViewById(R.id.textViewStatus);
-
+        textViewStatus = findViewById(R.id.textViewStatus);
         Button btnRefresh = findViewById(R.id.btnRefresh);
         Button buttonSend = findViewById(R.id.buttonSend);
+        buttonConnect = findViewById(R.id.buttonConnect);
+        buttonDisconnect = findViewById(R.id.buttonDisconnect);
 
         btnRefresh.setOnClickListener(v -> listDevices());
         buttonSend.setOnClickListener(v -> sendData());
+        buttonConnect.setOnClickListener(v -> connectToSelectedDevice());
+        buttonDisconnect.setOnClickListener(v -> disconnectSerialPort());
 
         deviceRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         listDevices();
 
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         registerReceiver(usbReceiver, filter, RECEIVER_NOT_EXPORTED);
+
+        updateConnectionStatus(false); // Awalnya disconnected
     }
 
     private void listDevices() {
@@ -90,29 +97,42 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "No USB devices found", Toast.LENGTH_SHORT).show();
             return;
         }
-        // Adapter untuk menampilkan daftar perangkat
-        DeviceAdapter deviceAdapter = new DeviceAdapter(availableDrivers, this::requestPermission);
+        DeviceAdapter deviceAdapter = new DeviceAdapter(availableDrivers, this::onDeviceSelected);
         deviceRecyclerView.setAdapter(deviceAdapter);
+    }
+
+    private void onDeviceSelected(UsbSerialDriver driver) {
+        disconnectSerialPort(); // Disconnect port aktif jika ada
+        requestPermission(driver); // Minta izin untuk perangkat yang dipilih
     }
 
     private void requestPermission(UsbSerialDriver driver) {
         UsbDevice device = driver.getDevice();
-        if (!usbManager.hasPermission(device)) {
-            PendingIntent permissionIntent = PendingIntent.getBroadcast(
-                    this, 0,
-                    new Intent(ACTION_USB_PERMISSION),
-                    PendingIntent.FLAG_IMMUTABLE);
-            usbManager.requestPermission(device, permissionIntent);
+        PendingIntent permissionIntent = PendingIntent.getBroadcast(
+                this, 0,
+                new Intent(ACTION_USB_PERMISSION),
+                PendingIntent.FLAG_IMMUTABLE);
+        usbManager.requestPermission(device, permissionIntent);
+        currentDriver = driver;
+    }
+
+    private void connectToSelectedDevice() {
+        if (currentDriver != null) {
+            requestPermission(currentDriver); // Minta izin untuk perangkat yang dipilih
         } else {
-            openSerialPort(driver);
+            Toast.makeText(this, "Please select a device first", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void updateConnectionStatus(boolean isConnected) {
         if (isConnected) {
-            status.setText("Status: Connected");
+            textViewStatus.setText("Status: Connected");
+            buttonConnect.setEnabled(false);
+            buttonDisconnect.setEnabled(true);
         } else {
-            status.setText("Status: Disconnected");
+            textViewStatus.setText("Status: Disconnected");
+            buttonConnect.setEnabled(true);
+            buttonDisconnect.setEnabled(false);
         }
     }
 
@@ -127,20 +147,32 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openSerialPort(UsbSerialDriver driver) {
-        Log.d("MainActivity", "Opening serial port for driver: " + driver);
         if (!driver.getPorts().isEmpty()) {
             serialPort = driver.getPorts().get(0);
             try {
-                assert serialPort != null;
                 serialPort.open(usbManager.openDevice(driver.getDevice()));
                 serialPort.setParameters(9600, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
                 startIoManager();
-                Toast.makeText(this, "Port opened", Toast.LENGTH_SHORT).show();
-                updateConnectionStatus(true);
+                updateConnectionStatus(true); // Status connected
+                Toast.makeText(this, "Connected to selected port", Toast.LENGTH_SHORT).show();
             } catch (IOException e) {
-                Log.e("MainActivity", "Error opening serial port", e);
                 Toast.makeText(this, "Failed to open port", Toast.LENGTH_SHORT).show();
+                updateConnectionStatus(false);
             }
+        }
+    }
+
+    private void disconnectSerialPort() {
+        try {
+            if (serialPort != null) {
+                serialPort.close();
+                updateConnectionStatus(false); // Status disconnected
+                Toast.makeText(this, "Disconnected from current port", Toast.LENGTH_SHORT).show();
+            }
+        } catch (IOException e) {
+            Toast.makeText(this, "Failed to close port", Toast.LENGTH_SHORT).show();
+        } finally {
+            serialPort = null; // Set serialPort ke null setelah terputus
         }
     }
 
@@ -150,13 +182,13 @@ public class MainActivity extends AppCompatActivity {
             public void onNewData(byte[] data) {
                 runOnUiThread(() -> {
                     String s = new String(data, StandardCharsets.UTF_8);
-                    Toast.makeText(MainActivity.this, s, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity2.this, s, Toast.LENGTH_SHORT).show();
                 });
             }
 
             @Override
             public void onRunError(Exception e) {
-                Toast.makeText(MainActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity2.this, e.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
         Executors.newSingleThreadExecutor().submit(usbIoManager);
@@ -178,12 +210,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         unregisterReceiver(usbReceiver);
-        try {
-            if (serialPort != null) {
-                serialPort.close();
-            }
-        } catch (IOException e) {
-            Toast.makeText(MainActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
+        disconnectSerialPort(); // Pastikan port tertutup saat Activity dihancurkan
     }
 }
