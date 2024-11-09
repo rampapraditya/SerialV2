@@ -30,6 +30,7 @@ public class DeviceAdapter extends RecyclerView.Adapter<DeviceAdapter.ViewHolder
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         UsbSerialDriver device = devices.get(position);
         holder.deviceName.setText(String.format("Device: %s", device.getDevice().getDeviceName()));
+        holder.deviceDetails.setText("Device ID : " + device.getDevice().getDeviceId() + ", Vendor ID : " + device.getDevice().getVendorId());
         holder.itemView.setOnClickListener(v -> listener.onDeviceClick(device));
     }
 
@@ -38,11 +39,15 @@ public class DeviceAdapter extends RecyclerView.Adapter<DeviceAdapter.ViewHolder
         return devices.size();
     }
 
-    static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView deviceName;
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+
+        private TextView deviceName;
+        private TextView deviceDetails;
+
         ViewHolder(View itemView) {
             super(itemView);
             deviceName = itemView.findViewById(R.id.deviceName);
+            deviceDetails = itemView.findViewById(R.id.deviceDetails);
         }
     }
 

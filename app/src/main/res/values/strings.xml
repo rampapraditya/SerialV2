@@ -7,4 +7,8 @@
     <string name="details">Details</string>
     <string name="refresh">Refresh</string>
     <string name="state">State</string>
+    <string name="enter_data_to_send">Enter data to send</string>
+    <string name="status_disconnected">Status: Disconnected</string>
+    <string name="output_data">Output Data</string>
+    <string name="refresh_devices">Refresh Devices</string>
 </resources>
