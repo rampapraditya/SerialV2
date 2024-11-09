@@ -29,7 +29,6 @@ import com.hoho.android.usbserial.util.SerialInputOutputManager;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
@@ -45,17 +44,12 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            if (ACTION_USB_PERMISSION.equals(action)) {
-                synchronized (this) {
-                    @SuppressLint("UnsafeIntentLaunch") UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                        if (device != null) {
-                            openSerialPort(Objects.requireNonNull(getDriverForDevice(device)));
-                        }
-                    } else {
-                        Toast.makeText(context, "Permission denied for device", Toast.LENGTH_SHORT).show();
-                    }
-                }
+            if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
+                listDevices();
+                requestPermissionForAllDevices();
+            } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
+                listDevices();
+                closeSerialPort();
             }
         }
     };
@@ -81,7 +75,9 @@ public class MainActivity extends AppCompatActivity {
         deviceRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         listDevices();
 
-        IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         registerReceiver(usbReceiver, filter, RECEIVER_NOT_EXPORTED);
     }
 
@@ -105,10 +101,23 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void requestPermissionForAllDevices() {
+        List<UsbSerialDriver> availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager);
+        for (UsbSerialDriver driver : availableDrivers) {
+            UsbDevice device = driver.getDevice();
+            if (!usbManager.hasPermission(device)) {
+                PendingIntent permissionIntent = PendingIntent.getBroadcast(
+                        this, 0, new Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_IMMUTABLE);
+                usbManager.requestPermission(device, permissionIntent);
+            }
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
     private void disconnectSerialPort() {
         try {
             if (serialPort != null) {
-                if(serialPort.isOpen()){
+                if (serialPort.isOpen()) {
                     serialPort.close();
                     updateConnectionStatus(false);
                     output.setText("Disconnected from current port");
@@ -119,6 +128,21 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void closeSerialPort() {
+        if (serialPort != null) {
+            try {
+                if (serialPort.isOpen()) {
+                    serialPort.close();
+                    serialPort = null;
+                    updateConnectionStatus(false);
+                }
+            } catch (IOException e) {
+                Toast.makeText(this, "Error closing port", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
     private void updateConnectionStatus(boolean isConnected) {
         if (isConnected) {
             status.setText("Status: Connected");
@@ -140,10 +164,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openSerialPort(UsbSerialDriver driver) {
-        output.setText("Opening serial port for driver: " + driver);
         if (!driver.getPorts().isEmpty()) {
             serialPort = driver.getPorts().get(0);
-
             try {
                 assert serialPort != null;
                 disconnectSerialPort();
@@ -169,11 +191,10 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
 
+            @SuppressLint("SetTextI18n")
             @Override
             public void onRunError(Exception e) {
-                runOnUiThread(() -> {
-                    output.setText("Error : " + e.getMessage());
-                });
+                runOnUiThread(() -> output.setText("Error : " + e.getMessage()));
             }
         });
         Executors.newSingleThreadExecutor().submit(usbIoManager);
@@ -195,15 +216,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         unregisterReceiver(usbReceiver);
-        try {
-            if (serialPort != null) {
-                if(serialPort.isOpen()){
-                    serialPort.close();
-                    serialPort = null;
-                }
-            }
-        } catch (IOException e) {
-            Toast.makeText(MainActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
+        closeSerialPort();
     }
 }
