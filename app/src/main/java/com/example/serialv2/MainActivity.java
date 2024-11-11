@@ -153,16 +153,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private UsbSerialDriver getDriverForDevice(UsbDevice device) {
-        List<UsbSerialDriver> availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager);
-        for (UsbSerialDriver driver : availableDrivers) {
-            if (driver.getDevice().equals(device)) {
-                return driver;
-            }
-        }
-        return null;
-    }
-
     private void openSerialPort(UsbSerialDriver driver) {
         if (!driver.getPorts().isEmpty()) {
             serialPort = driver.getPorts().get(0);

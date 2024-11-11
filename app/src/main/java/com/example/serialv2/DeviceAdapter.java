@@ -1,5 +1,6 @@
 package com.example.serialv2;
 
+import android.annotation.SuppressLint;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -26,11 +27,12 @@ public class DeviceAdapter extends RecyclerView.Adapter<DeviceAdapter.ViewHolder
         return new ViewHolder(view);
     }
 
+    @SuppressLint("DefaultLocale")
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         UsbSerialDriver device = devices.get(position);
         holder.deviceName.setText(String.format("Device: %s", device.getDevice().getDeviceName()));
-        holder.deviceDetails.setText("Device ID : " + device.getDevice().getDeviceId() + ", Vendor ID : " + device.getDevice().getVendorId());
+        holder.deviceDetails.setText(String.format("Device ID : %d, Vendor ID : %d", device.getDevice().getDeviceId(), device.getDevice().getVendorId()));
         holder.itemView.setOnClickListener(v -> listener.onDeviceClick(device));
     }
 
