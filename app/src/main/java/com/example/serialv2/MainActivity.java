@@ -26,9 +26,12 @@ import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.hoho.android.usbserial.driver.UsbSerialProber;
 import com.hoho.android.usbserial.util.SerialInputOutputManager;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
@@ -161,7 +164,8 @@ public class MainActivity extends AppCompatActivity {
                 disconnectSerialPort();
                 serialPort.open(usbManager.openDevice(driver.getDevice()));
                 serialPort.setParameters(9600, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
-                startIoManager();
+                //startIoManager();
+                startIoManagerV1();
                 Toast.makeText(this, "Port opened", Toast.LENGTH_SHORT).show();
                 updateConnectionStatus(true);
             } catch (IOException e) {
@@ -189,6 +193,28 @@ public class MainActivity extends AppCompatActivity {
         });
         Executors.newSingleThreadExecutor().submit(usbIoManager);
     }
+
+    @SuppressLint("SetTextI18n")
+    private void startIoManagerV1() {
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        executorService.submit(() -> {
+            byte[] buffer = new byte[1024];  // buffer size may be adjusted as needed
+            while (true) {
+                try {
+                    int len = serialPort.read(buffer, 100);  // `100` is a timeout in milliseconds
+                    if (len > 0) {
+                        String s = new String(buffer, 0, len, StandardCharsets.UTF_8);
+                        runOnUiThread(() -> output.append(s));  // Append to show continuous data
+                    }
+                } catch (IOException e) {
+                    runOnUiThread(() -> output.setText("Error: " + e.getMessage()));
+                    break;  // Exit the loop on an error to prevent continuous retries
+                }
+            }
+        });
+    }
+
+
 
     public void sendData() {
         if (serialPort != null) {
